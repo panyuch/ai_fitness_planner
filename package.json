@@ -1,0 +1,19 @@
+{
+  "name": "fitmeal-ai-diet-generator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "面向健身/运动人群的本地化 AI 周饮食计划生成器 (Next.js 14 + 本地营养计算引擎)",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "next": "14.2.15",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}
