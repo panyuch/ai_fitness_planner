@@ -25,8 +25,8 @@
 
   --radius: 14px;
   --radius-sm: 10px;
-  --shadow: 0 6px 24px rgba(13, 148, 136, 0.10);
-  --shadow-sm: 0 2px 8px rgba(13, 148, 136, 0.08);
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 30px rgba(13, 148, 136, 0.09);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(13, 148, 136, 0.07);
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -64,7 +64,31 @@ a {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 6px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.count-badge {
+  display: inline-block;
+  min-width: 18px;
+  height: 18px;
+  line-height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--teal);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .app-logo {
@@ -269,6 +293,16 @@ a {
   background: var(--surface-2);
 }
 
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-small {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
 .btn-danger {
   background: #fff;
   border: 1.5px solid #fecaca;
@@ -369,6 +403,13 @@ a {
   padding: 14px;
   margin-top: 14px;
   background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.day-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 2px 6px rgba(13, 148, 136, 0.08), 0 10px 24px rgba(13, 148, 136, 0.08);
 }
 
 .day-card.rest {
@@ -641,4 +682,348 @@ details.principle[open] > summary::before {
   font-size: 12px;
   color: var(--muted);
   margin: -6px 0 12px;
+}
+
+/* ---------- UX Round：字段提示（ticket 04） ---------- */
+.field-example {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ---------- UX Round：高级字段折叠（ticket 07） ---------- */
+details.adv-fields {
+  margin-top: 4px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+details.adv-fields > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--teal-dark);
+  user-select: none;
+}
+
+details.adv-fields > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.adv-fields > summary::before {
+  content: "▸ ";
+  color: var(--teal);
+}
+
+details.adv-fields[open] > summary::before {
+  content: "▾ ";
+}
+
+.adv-body {
+  padding: 4px 12px 12px;
+}
+
+/* ---------- UX Round：结果一句话结论（ticket 02） ---------- */
+.result-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 14px 0 4px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #ccfbf1 0%, #d1fae5 100%);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+}
+
+.rs-goal {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--teal-dark);
+}
+
+.rs-kcal {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.rs-kcal b {
+  font-size: 15px;
+  color: var(--teal-dark);
+}
+
+/* ---------- UX Round：术语白话解释（ticket 05） ---------- */
+.term-tip {
+  position: relative;
+  display: inline-block;
+  padding-bottom: 1px;
+  border-bottom: 1.5px dashed var(--teal-light);
+  color: var(--teal-dark);
+  cursor: help;
+  outline: none;
+}
+
+.term-tip .term-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(4px);
+  min-width: 180px;
+  max-width: 260px;
+  padding: 8px 11px;
+  background: #134e4a;
+  color: #f0fdfa;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.18);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  z-index: 40;
+  pointer-events: none;
+  white-space: normal;
+}
+
+.term-tip .term-bubble::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #134e4a;
+}
+
+.term-tip:hover .term-bubble,
+.term-tip:focus .term-bubble {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.glossary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 10px 0 4px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+}
+
+/* ---------- UX Round：首次欢迎向导（ticket 06） ---------- */
+.guide-card {
+  position: relative;
+  margin-top: 18px;
+  padding: 18px 20px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* 通用关闭按钮（向导卡片 / 历史面板共用） */
+.guide-close,
+.hp-close {
+  border: none;
+  background: var(--surface-2);
+  color: var(--muted);
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.guide-close:hover,
+.hp-close:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.guide-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+}
+
+.guide-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--teal-dark);
+  margin-bottom: 6px;
+}
+
+.guide-desc {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.guide-steps {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  font-size: 13px;
+  color: var(--text-soft);
+  line-height: 1.9;
+}
+
+.guide-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* ---------- UX Round：历史侧滑面板（ticket 08） ---------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.32);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.22s ease, visibility 0.22s ease;
+  z-index: 90;
+}
+
+.overlay.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.history-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(400px, 92vw);
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 32px rgba(15, 23, 42, 0.12);
+  transform: translateX(102%);
+  transition: transform 0.24s ease;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.history-panel.open {
+  transform: translateX(0);
+}
+
+.hp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 18px 6px;
+}
+
+.hp-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.hp-close {
+  position: static;
+}
+
+.hp-sub {
+  margin: 0;
+  padding: 0 18px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.hp-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--muted);
+  padding: 40px 24px;
+}
+
+.hp-empty .big {
+  font-size: 40px;
+  margin-bottom: 8px;
+}
+
+.hp-list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 12px 14px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hp-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.hp-item-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hp-item-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--teal-dark);
+}
+
+.hp-item-title b {
+  font-weight: 800;
+}
+
+.hp-time {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.hp-item-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.hp-item-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }

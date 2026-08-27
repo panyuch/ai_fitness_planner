@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import * as history from "../lib/history.js";
 
-const DISCLAIMER =
-  "本计划为通用营养参考，不构成医疗 / 临床营养建议；特殊健康状况、孕期、慢病等请遵医嘱；备赛 / 脱水等高风险操作需专业监督。";
+const GUIDE_KEY = "fitmeal:guideSeen";
 
 const DEFAULT_FORM = {
   sex: "male",
@@ -20,8 +20,6 @@ const DEFAULT_FORM = {
   steps: 8000,
   cardioFreq: 2,
 };
-
-const STORE_KEY = "fitmeal:v1";
 
 const SEX_OPTS = [
   { value: "male", label: "男" },
@@ -49,24 +47,27 @@ const SPLIT_OPTS = [
 ];
 const TRAIN_FREQ = [0, 1, 2, 3, 4, 5, 6, 7];
 
-function CardGroup({ options, value, onChange }) {
+function CardGroup({ options, value, onChange, example }) {
   return (
-    <div className="opt-grid">
-      {options.map((o) => (
-        <div
-          key={o.value}
-          className={"opt" + (value === o.value ? " selected" : "")}
-          onClick={() => onChange(o.value)}
-        >
-          {o.label}
-          {o.sub ? <span className="opt-sub">{o.sub}</span> : null}
-        </div>
-      ))}
-    </div>
+    <>
+      <div className="opt-grid">
+        {options.map((o) => (
+          <div
+            key={o.value}
+            className={"opt" + (value === o.value ? " selected" : "")}
+            onClick={() => onChange(o.value)}
+          >
+            {o.label}
+            {o.sub ? <span className="opt-sub">{o.sub}</span> : null}
+          </div>
+        ))}
+      </div>
+      {example ? <FieldHint>例：{example}</FieldHint> : null}
+    </>
   );
 }
 
-function NumberField({ label, value, onChange, min, max, step = 1, hint }) {
+function NumberField({ label, value, onChange, min, max, step = 1, hint, example }) {
   return (
     <div className="field">
       <div className="field-label">
@@ -82,8 +83,13 @@ function NumberField({ label, value, onChange, min, max, step = 1, hint }) {
         step={step}
         onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
       />
+      {example ? <FieldHint>例：{example}</FieldHint> : null}
     </div>
   );
+}
+
+function FieldHint({ children }) {
+  return <p className="field-example">{children}</p>;
 }
 
 export default function Page() {
@@ -92,36 +98,38 @@ export default function Page() {
   const [locked, setLocked] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [restored, setRestored] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyEntries, setHistoryEntries] = useState([]);
+  const [historyCount, setHistoryCount] = useState(0);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-  // 自动恢复 localStorage（ticket 10）
+  const refreshHistory = useCallback(() => {
+    const items = history.list();
+    setHistoryEntries(items);
+    setHistoryCount(items.length);
+  }, []);
+
+  // 启动：迁移旧单计划进历史（如存在）并恢复为当前工作区；初始化历史；首次向导
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORE_KEY);
-      if (raw) {
-        const d = JSON.parse(raw);
-        if (d.form) setForm(d.form);
-        if (d.locked) setLocked(d.locked);
-        if (d.result) setResult(d.result);
+      const { entry } = history.ensureMigrated();
+      if (entry) {
+        if (entry.form) setForm({ ...DEFAULT_FORM, ...entry.form });
+        if (entry.result) setResult(entry.result);
+        setLocked(entry.locked || {});
       }
     } catch {
       /* ignore */
     }
-    setRestored(true);
-  }, []);
-
-  const persist = useCallback((nextForm, nextLocked, nextResult) => {
+    refreshHistory();
     try {
-      localStorage.setItem(
-        STORE_KEY,
-        JSON.stringify({ form: nextForm, locked: nextLocked, result: nextResult })
-      );
+      if (!localStorage.getItem(GUIDE_KEY)) setGuideOpen(true);
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [refreshHistory]);
 
   const gen = useCallback(
     async (useLocked) => {
@@ -140,14 +148,13 @@ export default function Page() {
           return;
         }
         setResult(data);
-        persist(form, useLocked ? locked : {}, data);
       } catch (e) {
         setError("网络错误：" + e.message);
       } finally {
         setLoading(false);
       }
     },
-    [form, locked, persist]
+    [form, locked]
   );
 
   const toggleLock = (meal) => {
@@ -155,19 +162,23 @@ export default function Page() {
       const next = { ...prev };
       if (next[meal.key]) delete next[meal.key];
       else next[meal.key] = meal;
-      if (result) persist(form, next, result);
       return next;
     });
   };
 
-  const clearLocks = () => {
-    setLocked({});
-    if (result) persist(form, {}, result);
+  const clearLocks = () => setLocked({});
+
+  const closeGuide = () => {
+    setGuideOpen(false);
+    try {
+      localStorage.setItem(GUIDE_KEY, "1");
+    } catch {
+      /* ignore */
+    }
   };
 
-  const exportMd = () => {
-    if (!result) return;
-    const md = buildMarkdown(form, result);
+  const downloadMd = (md) => {
+    if (!md) return;
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -175,6 +186,39 @@ export default function Page() {
     a.download = "fitmeal-plan.md";
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const saveToHistory = () => {
+    if (!result) return;
+    history.add(form, result);
+    refreshHistory();
+  };
+
+  const exportCurrent = () => {
+    if (!result) return;
+    downloadMd(
+      history.exportMarkdown({ form, result, savedAt: new Date().toISOString() })
+    );
+  };
+
+  const openHistoryEntry = (id) => {
+    const entry = history.get(id);
+    if (!entry) return;
+    if (entry.form) setForm({ ...DEFAULT_FORM, ...entry.form });
+    setResult(entry.result || null);
+    setLocked(entry.locked || {});
+    setHistoryOpen(false);
+  };
+
+  const removeHistoryEntry = (id) => {
+    if (!window.confirm("确定删除这条历史计划？此操作不可恢复。")) return;
+    history.remove(id);
+    refreshHistory();
+  };
+
+  const openHistoryPanel = () => {
+    refreshHistory();
+    setHistoryOpen(true);
   };
 
   return (
@@ -185,7 +229,15 @@ export default function Page() {
           <h1 className="app-title">FitMeal · AI 饮食计划生成器</h1>
           <p className="app-sub">本地化营养计算 · 透明可解释 · 零运行时外部依赖</p>
         </div>
+        <div className="header-actions">
+          <button className="btn btn-ghost" onClick={openHistoryPanel}>
+            🕘 历史
+            {historyCount > 0 ? <span className="count-badge">{historyCount}</span> : null}
+          </button>
+        </div>
       </div>
+
+      {guideOpen ? <FirstRunGuide onDone={closeGuide} /> : null}
 
       <div className="layout">
         {/* ---------------- 左栏：表单 ---------------- */}
@@ -197,13 +249,19 @@ export default function Page() {
               <CardGroup options={SEX_OPTS} value={form.sex} onChange={(v) => setField("sex", v)} />
             </div>
             <div className="input-row">
-              <NumberField label="年龄" value={form.age} min={14} max={100} onChange={(v) => setField("age", v)} />
-              <NumberField label="体重 (kg)" value={form.weight} min={30} max={250} onChange={(v) => setField("weight", v)} />
+              <NumberField label="年龄" value={form.age} min={14} max={100} onChange={(v) => setField("age", v)} example="18–60 常见" />
+              <NumberField label="体重 (kg)" value={form.weight} min={30} max={250} onChange={(v) => setField("weight", v)} example="60–80 常见" />
             </div>
             <div className="input-row">
-              <NumberField label="身高 (cm)" value={form.height} min={120} max={230} onChange={(v) => setField("height", v)} />
-              <NumberField label="体脂率 (选填)" value={form.bodyFat} onChange={(v) => setField("bodyFat", v)} />
+              <NumberField label="身高 (cm)" value={form.height} min={120} max={230} onChange={(v) => setField("height", v)} example="160–185 常见" />
+              <div className="field" style={{ flex: 1 }} />
             </div>
+            <details className="adv-fields">
+              <summary>⚙️ 高级：体脂率（选填）</summary>
+              <div className="adv-body">
+                <NumberField label="体脂率 (%)" value={form.bodyFat} min={3} max={60} onChange={(v) => setField("bodyFat", v)} example="15（只用于展示，不影响热量计算）" />
+              </div>
+            </details>
           </section>
 
           <section className="panel">
@@ -213,7 +271,7 @@ export default function Page() {
               <CardGroup options={GOAL_OPTS} value={form.goal} onChange={(v) => setField("goal", v)} />
             </div>
             <div className="input-row">
-              <NumberField label="周期 (周)" value={form.timelineWeeks} min={1} max={52} onChange={(v) => setField("timelineWeeks", v)} />
+              <NumberField label="周期 (周)" value={form.timelineWeeks} min={1} max={52} onChange={(v) => setField("timelineWeeks", v)} example="备赛常见 8–12 周" />
               <div className="field" style={{ flex: 1 }}>
                 <div className="field-label"><span>BMR 方程</span><span className="hint">自动选择</span></div>
                 <p className="field-note">系统会按你填写的「身高」自动选用更精确的方程：填了身高 → Mifflin-St Jeor（含身高）；未填 → Henry 2005。结果页「计算依据」会标明实际采用的方程。</p>
@@ -236,23 +294,29 @@ export default function Page() {
                   </div>
                 ))}
               </div>
+              <FieldHint>0=不练 · 3=入门 · 5=进阶 · 6–7=高频率</FieldHint>
             </div>
-            <div className="field">
-              <div className="field-label"><span>分化类型</span><span className="hint">展示文案</span></div>
-              <CardGroup options={SPLIT_OPTS} value={form.splitType} onChange={(v) => setField("splitType", v)} />
-            </div>
-            <div className="field">
-              <div className="field-label"><span>训练强度</span></div>
-              <CardGroup options={INTENSITY_OPTS} value={form.intensity} onChange={(v) => setField("intensity", v)} />
-            </div>
-            <div className="field">
-              <div className="field-label"><span>工作性质</span></div>
-              <CardGroup options={WORK_OPTS} value={form.workType} onChange={(v) => setField("workType", v)} />
-            </div>
-            <div className="input-row">
-              <NumberField label="日均步数" value={form.steps} min={0} max={40000} step={500} onChange={(v) => setField("steps", v)} />
-              <NumberField label="每周有氧 (次)" value={form.cardioFreq} min={0} max={14} onChange={(v) => setField("cardioFreq", v)} />
-            </div>
+            <details className="adv-fields">
+              <summary>⚙️ 高级设置：分化 / 强度 / 工作性质 / 步数 / 有氧</summary>
+              <div className="adv-body">
+                <div className="field">
+                  <div className="field-label"><span>分化类型</span></div>
+                  <CardGroup options={SPLIT_OPTS} value={form.splitType} onChange={(v) => setField("splitType", v)} example="推拉腿=按部位拆分的经典安排" />
+                </div>
+                <div className="field">
+                  <div className="field-label"><span>训练强度</span></div>
+                  <CardGroup options={INTENSITY_OPTS} value={form.intensity} onChange={(v) => setField("intensity", v)} example="中=接近力竭为主" />
+                </div>
+                <div className="field">
+                  <div className="field-label"><span>工作性质</span></div>
+                  <CardGroup options={WORK_OPTS} value={form.workType} onChange={(v) => setField("workType", v)} example="久坐=办公室为主" />
+                </div>
+                <div className="input-row">
+                  <NumberField label="日均步数" value={form.steps} min={0} max={40000} step={500} onChange={(v) => setField("steps", v)} example="5000–12000 常见" />
+                  <NumberField label="每周有氧 (次)" value={form.cardioFreq} min={0} max={14} onChange={(v) => setField("cardioFreq", v)} example="0–3 常见" />
+                </div>
+              </div>
+            </details>
           </section>
 
           <button className="btn btn-primary btn-block" disabled={loading} onClick={() => gen(false)}>
@@ -283,16 +347,27 @@ export default function Page() {
                 clearLocks();
                 gen(false);
               }}
-              onExport={exportMd}
+              onExport={exportCurrent}
+              onSave={saveToHistory}
             />
           )}
         </div>
       </div>
+
+      <HistoryPanel
+        open={historyOpen}
+        entries={historyEntries}
+        onClose={() => setHistoryOpen(false)}
+        onOpen={openHistoryEntry}
+        onRemove={removeHistoryEntry}
+        onExport={(e) => downloadMd(history.exportMarkdown(e))}
+      />
     </main>
   );
 }
 
-function ResultView({ form, result, locked, onToggleLock, onRegen, onClearAndRegen, onExport }) {
+// ---------------- 结果视图 ----------------
+function ResultView({ form, result, locked, onToggleLock, onRegen, onClearAndRegen, onExport, onSave }) {
   const { calc, plan, usedAI } = result;
   return (
     <>
@@ -305,20 +380,23 @@ function ResultView({ form, result, locked, onToggleLock, onRegen, onClearAndReg
             </span>
           </h2>
           <div className="btn-row">
+            <SaveButton onSave={onSave} />
             <button className="btn btn-ghost" onClick={onRegen}>🔄 重生成（保留锁餐）</button>
-            <button className="btn btn-danger" onClick={onClearAndRegen}>🗑 清空锁餐重生成</button>
-            <button className="btn btn-primary" onClick={onExport}>⬇ 导出 Markdown</button>
+            <button className="btn btn-ghost" onClick={onClearAndRegen}>🗑 清空锁餐重生成</button>
+            <button className="btn btn-ghost" onClick={onExport}>⬇ 导出 Markdown</button>
           </div>
         </div>
 
-        {/* 计算依据汇总条 */}
-        <div className="calc-strip">
-          <Cell k="BMR" v={calc.bmr} u="kcal" sub={calc.equation === "mifflin" ? "Mifflin" : "Henry"} />
-          <Cell k="PAL" v={calc.pal} u="" />
-          <Cell k="TDEE" v={calc.tdee} u="kcal" />
-          <Cell k="训练日" v={calc.phaseKcal} u="kcal" />
-          <Cell k="休息日" v={calc.restKcal} u="kcal" />
-          <Cell k="每日蛋白" v={calc.proteinG} u="g" sub={`${calc.proteinPerKg} g/kg`} />
+        {/* 一句话结论（常驻，ticket 02）：目标+周期 + TDEE + 每日热量 */}
+        <div className="result-summary">
+          <div className="rs-goal">🎯 {history.goalText(calc.goal)} · {form.timelineWeeks} 周</div>
+          <div className="rs-kcal">
+            <span>
+              <TermTip term="TDEE">一天总消耗，维持体重所需热量</TermTip> <b>{calc.tdee}</b> kcal
+            </span>
+            <span>训练日 <b>{calc.phaseKcal}</b> kcal</span>
+            <span>休息日 <b>{calc.restKcal}</b> kcal</span>
+          </div>
         </div>
 
         {plan.days.map((day) => (
@@ -327,19 +405,35 @@ function ResultView({ form, result, locked, onToggleLock, onRegen, onClearAndReg
 
         <PrinciplePanel form={form} calc={calc} />
 
-        <div className="disclaimer">⚠️ {DISCLAIMER}</div>
+        <div className="disclaimer">⚠️ {history.DISCLAIMER}</div>
       </section>
     </>
   );
 }
 
-function Cell({ k, v, u, sub }) {
+function SaveButton({ onSave }) {
+  const [saved, setSaved] = useState(false);
   return (
-    <div className="calc-cell">
-      <div className="k">{k}</div>
-      <div className="v">{v}</div>
-      <div className="u">{u}{sub ? ` · ${sub}` : ""}</div>
-    </div>
+    <button
+      className="btn btn-primary"
+      onClick={() => {
+        onSave();
+        setSaved(true);
+        window.setTimeout(() => setSaved(false), 2000);
+      }}
+    >
+      {saved ? "✓ 已保存" : "💾 保存此计划"}
+    </button>
+  );
+}
+
+// 术语白话解释（ticket 05）：下划虚线词 + 悬停气泡
+function TermTip({ term, children }) {
+  return (
+    <span className="term-tip" tabIndex={0}>
+      {term}
+      <span className="term-bubble">{children}</span>
+    </span>
   );
 }
 
@@ -412,9 +506,16 @@ function PrinciplePanel({ form, calc }) {
   const isHenry = calc.equation === "henry";
   return (
     <details className="principle">
-      <summary>📐 计算依据（Principle · 透明可解释）</summary>
+      <summary>📐 计算依据（展开查看公式与宏量占比）</summary>
       <div className="principle-body">
         <p>本计划的热量与宏量分配完全在本地计算，以下为所用公式与你的参数。</p>
+
+        <div className="glossary-row">
+          <TermTip term="BMR">基础代谢率：躺着不动一天也要消耗的热量</TermTip>
+          <TermTip term="PAL">活动系数：日常活动水平的倍率</TermTip>
+          <TermTip term="碳循环">训练日高碳水、休息日低碳水的安排</TermTip>
+          <TermTip term="宏量">蛋白 / 碳水 / 脂肪三大营养素</TermTip>
+        </div>
 
         <div className="formula">
           {isHenry
@@ -437,7 +538,7 @@ function PrinciplePanel({ form, calc }) {
         </div>
 
         <div className="formula">
-          {`阶段热量（目标 ${goalText(calc.goal)}，周期 ${form.timelineWeeks} 周）：\n` +
+          {`阶段热量（目标 ${history.goalText(calc.goal)}，周期 ${form.timelineWeeks} 周）：\n` +
             `  调整 ${Math.round(calc.phaseAdjustPct * 100)}%  →  训练日 ${calc.phaseKcal} kcal\n` +
             `  ${calc.goal === "cut" ? `休息日 = 训练日 × 95% = ${calc.restKcal} kcal（放大碳循环）` : `休息日 = ${calc.restKcal} kcal`}\n` +
             `蛋白: ${calc.proteinPerKg} g/kg × ${form.weight}kg = ${calc.proteinG} g/天`}
@@ -448,8 +549,8 @@ function PrinciplePanel({ form, calc }) {
             <tr><th>类型</th><th>碳水占比</th><th>脂肪占比</th><th>蛋白</th></tr>
           </thead>
           <tbody>
-            <tr><td>训练日</td><td>{pct(calc.train.carbPct)}</td><td>{pct(calc.train.fatPct)}</td><td rowSpan="2">{calc.proteinG} g</td></tr>
-            <tr><td>休息日</td><td>{pct(calc.rest.carbPct)}</td><td>{pct(calc.rest.fatPct)}</td></tr>
+            <tr><td>训练日</td><td>{history.pct(calc.train.carbPct)}</td><td>{history.pct(calc.train.fatPct)}</td><td rowSpan="2">{calc.proteinG} g</td></tr>
+            <tr><td>休息日</td><td>{history.pct(calc.rest.carbPct)}</td><td>{history.pct(calc.rest.fatPct)}</td></tr>
           </tbody>
         </table>
         <p className="section-note">碳循环：训练日高碳促合成，休息日低碳控热量；蛋白按 g/kg 恒定。</p>
@@ -467,56 +568,102 @@ function PrinciplePanel({ form, calc }) {
   );
 }
 
-const pct = (x) => `${Math.round(x * 100)}%`;
-const goalText = (g) => ({ cut: "减脂", bulk: "增肌", maintain: "维持" }[g] || g);
+// ---------------- 首次欢迎向导（ticket 06） ----------------
+function FirstRunGuide({ onDone }) {
+  const [step, setStep] = useState(1);
+  return (
+    <div className="guide-card">
+      <button className="guide-close" onClick={onDone} aria-label="关闭">✕</button>
+      {step === 1 ? (
+        <>
+          <div className="guide-title">👋 欢迎使用 FitMeal</div>
+          <p className="guide-desc">生成一份 7 天饮食计划只需 3 步：</p>
+          <ol className="guide-steps">
+            <li><b>填写左侧表单</b> — 核心几项就够，高级设置已折叠可跳过</li>
+            <li><b>点「⚡ 生成我的周计划」</b> — 立即得到 7 天食谱</li>
+            <li><b>满意就点「💾 保存此计划」</b> — 存进历史，随时找回</li>
+          </ol>
+          <div className="guide-actions">
+            <button className="btn btn-ghost" onClick={onDone}>跳过</button>
+            <button className="btn btn-primary" onClick={() => setStep(2)}>下一步 →</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="guide-title">💡 小提示</div>
+          <p className="guide-desc">
+            所有计算都在本地完成，不上传任何数据。历史计划最多保留最近 20 条；
+            老版本保存过的计划会自动迁移进历史，不会丢失。
+          </p>
+          <div className="guide-actions">
+            <button className="btn btn-primary" onClick={onDone}>开始使用 🚀</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------- 历史侧滑面板（ticket 08） ----------------
+function HistoryPanel({ open, entries, onClose, onOpen, onRemove, onExport }) {
+  return (
+    <>
+      <div className={"overlay" + (open ? " show" : "")} onClick={onClose} />
+      <aside className={"history-panel" + (open ? " open" : "")} aria-hidden={!open}>
+        <div className="hp-head">
+          <h2>🕘 计划历史</h2>
+          <button className="hp-close" onClick={onClose} aria-label="关闭">✕</button>
+        </div>
+        <p className="hp-sub">手动保存的计划 · 最多保留最近 20 条</p>
+        {entries.length === 0 ? (
+          <div className="hp-empty">
+            <div className="big">🗂️</div>
+            <p>还没有保存过的计划。</p>
+            <p className="section-note">生成计划后，点结果页的「💾 保存此计划」即可存入这里。</p>
+          </div>
+        ) : (
+          <ul className="hp-list">
+            {entries.map((e) => (
+              <li key={e.id} className="hp-item">
+                <div className="hp-item-main">
+                  <div className="hp-item-title">
+                    <b>{history.goalText(e.summary.goal)} · {e.summary.timelineWeeks} 周</b>
+                    <span className="hp-time">{fmtTime(e.savedAt)}</span>
+                  </div>
+                  <div className="hp-item-meta">
+                    TDEE {e.summary.tdee} kcal ｜ 训练日 {e.summary.phaseKcal} · 休息日 {e.summary.restKcal} kcal
+                  </div>
+                </div>
+                <div className="hp-item-actions">
+                  <button className="btn btn-small" onClick={() => onOpen(e.id)}>打开</button>
+                  <button className="btn btn-small" onClick={() => onExport(e)}>导出</button>
+                  <button className="btn btn-small btn-danger" onClick={() => onRemove(e.id)}>删除</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </aside>
+    </>
+  );
+}
+
+// ---------------- 小工具 ----------------
 const basePalText = (f) =>
   f >= 6 ? "1.725" : f >= 3 ? "1.55" : f >= 1 ? "1.375" : "1.2";
 const workText = (w) => ({ sedentary: "0", light: "+0.05", heavy: "+0.15" }[w] || "0");
 const cardioText = (c) => `min(0.1, ${(c || 0) * 0.02})`;
 const stepsText = (s) => `min(0.15, ${((s || 0) / 1000) * 0.01})`;
 const intensityText = (i) => ({ low: "0", mid: "+0.03", high: "+0.06" }[i] || "0");
-
-// ---------------- Markdown 导出 ----------------
-function buildMarkdown(form, result) {
-  const { calc, plan } = result;
-  const L = [];
-  L.push(`# FitMeal 周饮食计划`);
-  L.push("");
-  L.push(`> 生成时间：${new Date().toLocaleString("zh-CN")} · 本地计算 · 非商业 Demo`);
-  L.push("");
-  L.push(`## 一、计算依据`);
-  L.push("");
-  L.push(`- 性别/年龄/体重/身高：${form.sex === "female" ? "女" : "男"} / ${form.age}岁 / ${form.weight}kg / ${form.height}cm`);
-  L.push(`- BMR 方程：${calc.equation === "mifflin" ? "Mifflin-St Jeor（含身高）" : "Henry 2005"} → **${calc.bmr} kcal**`);
-  L.push(`- PAL：${calc.pal}（钳制 [1.2,1.9]）`);
-  L.push(`- TDEE：${calc.tdee} kcal`);
-  L.push(`- 目标：${goalText(calc.goal)} · 周期 ${form.timelineWeeks} 周 · 阶段调整 ${Math.round(calc.phaseAdjustPct * 100)}%`);
-  L.push(`- 每日热量：训练日 **${calc.phaseKcal} kcal** / 休息日 **${calc.restKcal} kcal**`);
-  L.push(`- 每日蛋白：${calc.proteinG} g（${calc.proteinPerKg} g/kg）`);
-  L.push(`- 宏量占比：训练日 碳水 ${pct(calc.train.carbPct)} / 脂肪 ${pct(calc.train.fatPct)}；休息日 碳水 ${pct(calc.rest.carbPct)} / 脂肪 ${pct(calc.rest.fatPct)}`);
-  if (calc.peakWeek) {
-    L.push("");
-    L.push(`- 备赛充碳周提示：`);
-    calc.peakWeek.forEach((s) => L.push(`  - ${s}`));
-  }
-  L.push("");
-  L.push(`## 二、7 天饮食计划`);
-  L.push("");
-  plan.days.forEach((day) => {
-    L.push(`### ${day.label}（${day.isTrain ? "训练日" : "休息日"}）`);
-    L.push("");
-    L.push(`全天：${day.totals.kcal} kcal ｜ 蛋白 ${Math.round(day.totals.p)}g ｜ 碳水 ${Math.round(day.totals.c)}g ｜ 脂肪 ${Math.round(day.totals.f)}g`);
-    L.push("");
-    day.meals.forEach((m) => {
-      const foods = m.items.map((it) => `${it.name} ${Math.round(it.grams)}g`).join(" + ");
-      L.push(`- **${m.label}**：${foods}`);
-      L.push(`  - 单餐 ${m.kcal} kcal ｜ 蛋白 ${Math.round(m.p)}g ｜ 碳水 ${Math.round(m.c)}g ｜ 脂肪 ${Math.round(m.f)}g`);
+const fmtTime = (iso) => {
+  try {
+    return new Date(iso).toLocaleString("zh-CN", {
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
-    L.push("");
-  });
-  L.push(`## 三、免责声明`);
-  L.push("");
-  L.push(DISCLAIMER);
-  L.push("");
-  return L.join("\n");
-}
+  } catch {
+    return "";
+  }
+};
