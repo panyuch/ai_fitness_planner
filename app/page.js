@@ -13,7 +13,6 @@ const DEFAULT_FORM = {
   bodyFat: "",
   goal: "cut",
   timelineWeeks: 8,
-  bmrEquation: "henry",
   trainFreq: 5,
   splitType: "推拉腿(PPL)",
   intensity: "mid",
@@ -32,10 +31,6 @@ const GOAL_OPTS = [
   { value: "cut", label: "减脂", sub: "cut" },
   { value: "bulk", label: "增肌", sub: "bulk" },
   { value: "maintain", label: "维持", sub: "maintain" },
-];
-const BMR_OPTS = [
-  { value: "henry", label: "Henry 方程", sub: "仅体重" },
-  { value: "mifflin", label: "Mifflin-St Jeor", sub: "含身高" },
 ];
 const INTENSITY_OPTS = [
   { value: "low", label: "低" },
@@ -133,7 +128,7 @@ export default function Page() {
       setLoading(true);
       setError(null);
       try {
-        const input = { ...form };
+        const { bmrEquation, ...input } = form;
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -196,7 +191,7 @@ export default function Page() {
         {/* ---------------- 左栏：表单 ---------------- */}
         <div>
           <section className="panel">
-            <h2 className="panel-title">基本信息 <span className="tag">§3.1</span></h2>
+            <h2 className="panel-title">基本信息</h2>
             <div className="field">
               <div className="field-label"><span>性别</span></div>
               <CardGroup options={SEX_OPTS} value={form.sex} onChange={(v) => setField("sex", v)} />
@@ -212,7 +207,7 @@ export default function Page() {
           </section>
 
           <section className="panel">
-            <h2 className="panel-title">目标与周期 <span className="tag">§3.2</span></h2>
+            <h2 className="panel-title">目标与周期</h2>
             <div className="field">
               <div className="field-label"><span>目标</span></div>
               <CardGroup options={GOAL_OPTS} value={form.goal} onChange={(v) => setField("goal", v)} />
@@ -220,14 +215,14 @@ export default function Page() {
             <div className="input-row">
               <NumberField label="周期 (周)" value={form.timelineWeeks} min={1} max={52} onChange={(v) => setField("timelineWeeks", v)} />
               <div className="field" style={{ flex: 1 }}>
-                <div className="field-label"><span>BMR 方程</span><span className="hint">ticket 12</span></div>
-                <CardGroup options={BMR_OPTS} value={form.bmrEquation} onChange={(v) => setField("bmrEquation", v)} />
+                <div className="field-label"><span>BMR 方程</span><span className="hint">自动选择</span></div>
+                <p className="field-note">系统会按你填写的「身高」自动选用更精确的方程：填了身高 → Mifflin-St Jeor（含身高）；未填 → Henry 2005。结果页「计算依据」会标明实际采用的方程。</p>
               </div>
             </div>
           </section>
 
           <section className="panel">
-            <h2 className="panel-title">训练与活动 <span className="tag">§3.3</span></h2>
+            <h2 className="panel-title">训练与活动</h2>
             <div className="field">
               <div className="field-label"><span>每周训练频率</span><span className="hint">{form.trainFreq} 次/周</span></div>
               <div className="opt-grid">

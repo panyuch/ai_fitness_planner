@@ -259,8 +259,8 @@ NODE_OPTIONS="" npm run dev
 ## 13. 已知限制 / 后续迭代
 
 1. **生成器餐次仅组合 4 类**：目前每餐 = 主蛋白 + 碳水 + 蔬菜 + 脂肪；`fruit` / `dairy` 池已建库但**尚未接入餐次生成**（可作为加餐候选）。
-2. **身高 `height` 已采集但未进入 BMR 计算**（Henry 方程仅用体重）；如需更精细可替换为 Mifflin-St Jeor 等含身高方程。
-3. **`steps` / `intensity` / `splitType`** 目前仅用于展示文案，未进入热量/PAL 计算。
+2. **身高 `height` 已接入 BMR**（ticket 12）：填了有效身高时引擎自动改用 Mifflin-St Jeor（含身高，更精确），未填则回落 Henry 2005；界面不暴露方程选择，由系统按身高自动决策。
+3. **`steps` / `intensity` 已进入 PAL 计算**（ticket 13）：步数→NEAT 加成、训练强度有加成；`splitType` 仍仅用于展示文案。
 4. **本地生成器为启发式**：非 LLM，食材搭配较固定；AI 模式（需 key）可产出更自然的组合。
 5. **未做持久化**：刷新即丢失，无保存 / 历史记录。
 6. **跨会话源码曾被沙箱误删**：强烈建议对 D:\working\fitness 做版本管理（如 `git init`）或定期备份。

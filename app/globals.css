@@ -159,6 +159,17 @@ a {
   font-size: 12px;
 }
 
+.field-note {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
 .opt-grid {
   display: grid;
   gap: 8px;
