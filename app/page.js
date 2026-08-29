@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import * as history from "../lib/history.js";
 
 const GUIDE_KEY = "fitmeal:guideSeen";
@@ -102,6 +102,9 @@ export default function Page() {
   const [historyEntries, setHistoryEntries] = useState([]);
   const [historyCount, setHistoryCount] = useState(0);
   const [guideOpen, setGuideOpen] = useState(false);
+  // ticket 01：重生成 seed 计数器——首次生成不携带（默认 seed 可复现），
+  // 每次「重生成 / 清空锁餐重生成」递增携带，驱动算法模式食材轮换 + 分量浮动。
+  const seedRef = useRef(0);
 
   const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -132,15 +135,17 @@ export default function Page() {
   }, [refreshHistory]);
 
   const gen = useCallback(
-    async (useLocked) => {
+    async (useLocked, isRegen = false) => {
       setLoading(true);
       setError(null);
       try {
         const { bmrEquation, ...input } = form;
+        // 重生成换新 seed（1, 2, 3…），首次生成不带 seed
+        const seed = isRegen ? ++seedRef.current : undefined;
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ input, locked: useLocked ? locked : {} }),
+          body: JSON.stringify({ input, locked: useLocked ? locked : {}, seed }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -342,10 +347,10 @@ export default function Page() {
               result={result}
               locked={locked}
               onToggleLock={toggleLock}
-              onRegen={() => gen(true)}
+              onRegen={() => gen(true, true)}
               onClearAndRegen={() => {
                 clearLocks();
-                gen(false);
+                gen(false, true);
               }}
               onExport={exportCurrent}
               onSave={saveToHistory}

@@ -115,6 +115,8 @@ export async function POST(request) {
   }
 
   const { input = {}, locked = {} } = body || {};
+  // 仅接受有限数字 seed（重生成携带）；缺省/非法 → undefined → 默认 seed 与 v1.0 一致
+  const seed = typeof body?.seed === "number" && Number.isFinite(body.seed) ? body.seed : undefined;
   const err = validateInput(input);
   if (err) return NextResponse.json({ error: err }, { status: 400 });
 
@@ -140,7 +142,8 @@ export async function POST(request) {
   }
 
   if (!plan) {
-    plan = generateWeek(input, locked);
+    // seed：首次生成不携带 → 默认 seed（与 v1.0 一致）；重生成携带新 seed 启用随机化
+    plan = generateWeek(input, locked, seed);
     usedAI = false;
   } else if (usedAI && locked && Object.keys(locked).length) {
     // AI 模式下同样尊重锁餐：用本地锁定餐次覆盖 AI 结果
