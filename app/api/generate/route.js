@@ -1,6 +1,7 @@
 // app/api/generate/route.js
-// POST /api/generate  { input, locked } -> { calc, plan, usedAI }
-// 无 AI key 或调用失败 → 自动回退本地生成器（usedAI:false）。
+// POST /api/generate  { input, locked, seed?, useAI? } -> { calc, plan, usedAI }
+// 双模式路由：useAI 缺省/为 false → 直接走本地生成器（seed 生效）；
+// useAI=true → 探测 LLM（云端 key 优先，其次本机 Ollama），失败/超时回退本地（usedAI:false）。
 
 import { NextResponse } from "next/server";
 import { generateWeek } from "../../../lib/generator.js";
@@ -11,6 +12,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const GOALS = ["cut", "bulk", "maintain"];
+// ticket 02：本地 8b 模型生成需 30-90s，AI 调用超时上限（此前为 15s）
+const AI_TIMEOUT_MS = 90_000;
 
 function validateInput(input) {
   if (!input || typeof input !== "object") return "缺少输入对象";
@@ -82,20 +85,25 @@ function overlayLocked(plan, locked) {
 
 async function callAI(providerKey, input, calc, signal) {
   const p = PROVIDERS[providerKey];
-  const apiKey = process.env[p.envKey];
+  const headers = { "Content-Type": "application/json" };
+  // 云端 provider 需要 API key；Ollama 本机服务无需鉴权，不带 Authorization
+  if (p.envKey && process.env[p.envKey]) {
+    headers.Authorization = `Bearer ${process.env[p.envKey]}`;
+  }
   const messages = buildMessages(input, calc);
+  const body = {
+    model: p.model,
+    messages,
+    response_format: { type: "json_object" },
+    temperature: 0.6,
+  };
+  // provider 配置驱动的附加参数（如 ollama 的 enable_thinking:false），
+  // 保持「新增 provider 只改注册表一行」的接入原则
+  if (p.enableThinking === false) body.enable_thinking = false;
   const res = await fetch(p.baseURL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: p.model,
-      messages,
-      response_format: { type: "json_object" },
-      temperature: 0.6,
-    }),
+    headers,
+    body: JSON.stringify(body),
     signal,
   });
   if (!res.ok) throw new Error(`${p.name} HTTP ${res.status}`);
@@ -114,7 +122,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "请求体不是合法 JSON" }, { status: 400 });
   }
 
-  const { input = {}, locked = {} } = body || {};
+  const { input = {}, locked = {}, useAI = false } = body || {};
   // 仅接受有限数字 seed（重生成携带）；缺省/非法 → undefined → 默认 seed 与 v1.0 一致
   const seed = typeof body?.seed === "number" && Number.isFinite(body.seed) ? body.seed : undefined;
   const err = validateInput(input);
@@ -122,14 +130,15 @@ export async function POST(request) {
 
   const calc = computeMacros(input);
 
-  // 探测 AI key，命中则尝试对应 LLM；任何失败/超时 → 回退本地
-  const providerKey = detectProvider();
+  // 双模式路由：useAI=true 才探测 LLM（云端 key 优先，其次本机 Ollama）。
+  // 任何失败/超时 → 回退本地引擎；Ollama 未运行/模型缺失时连接被拒快速失败，响应仍完整。
   let plan = null;
   let usedAI = false;
 
-  if (providerKey) {
+  if (useAI) {
+    const providerKey = detectProvider();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
+    const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
     try {
       plan = await callAI(providerKey, input, calc, controller.signal);
       usedAI = true;
