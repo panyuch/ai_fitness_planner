@@ -44,7 +44,8 @@
   ```json
   { "days": [ { "meals": [ { "items": [ { "id": "chicken_breast" } ] } ] } ] }
   ```
-  不含克数、不含宏量。服务端校验全部 id 存在于食材库，任一非法 → 整体抛错回退本地；合法 → 由算法引擎按宏量目标分配分量并组装完整 plan。
+  不含克数、不含宏量、不含 schedule（训练日排程由算法 `buildSchedule` 确定）。服务端校验全部 id 存在于食材库，**库外 id → 整体抛错回退本地**；**缺 id 的残缺项 → 忽略**（qwen3 实测偶发输出缺 id 项，整体结构正确时容错，食材仍 100% 来自库内；一餐无任何有效食材才回退）。合法 → 由算法引擎按宏量目标分配分量并组装完整 plan。
+- **受控选材组装**：`buildWeekFromIds` 按 pool 归类 AI 选材（蛋白/碳水/蔬菜/脂肪/加餐），每池取第一个；**AI 未给的槽位用池内默认补全**（保证算法可行性），加餐无 fruit/dairy 时按算法默认补。与 `generateWeek` 共用 7 天组装循环（`buildWeekLoop`，锁餐分支/totals 汇总同源）。
 - **提示词构造**：LLM 输入 = 用户数据 + 计算依据（calc 摘要）+ 食材库候选清单（id + 名称，按池分组）+ 已锁定餐次摘要（如"第1天 早餐 已锁定：鸡胸肉 150g + 米饭 200g"），并要求避让重复。qwen3 请求体显式 `enable_thinking: false`，避免思考过程混入破坏 JSON 解析。
 - **provider 注册**：在既有 provider 注册表增加 ollama（baseURL 指向本机 Ollama OpenAI 兼容端点，model `qwen3:8b`）。探测顺序：云端真实 key（DeepSeek / 通义）→ Ollama。Ollama 连接被拒应快速失败，复用现有回退路径。
 - **超时与等待**：AI 调用超时 15s → 90s；前端在 AI 模式下展示进度文案。
@@ -53,10 +54,11 @@
 ## Testing Decisions
 
 - **好测试的标准**：只断言外部行为——输出宏量偏差在既有容差内、结构完整、seed 确定性/差异性、锁餐不变性、AI 输出校验通过/拒绝；不测内部实现细节（不断言具体用了哪个池、哪轮迭代）。
-- **接缝（3 个 lib 纯函数，均已与用户确认）**：
+- **接缝（4 个 lib 纯函数，均已与用户确认）**：
   1. `generateWeek(input, locked, seed)`——算法随机化 + 锁餐 + 分量收敛。
   2. `buildMessages` / `detectProvider`——提示词内容（食材清单、锁餐摘要）与 provider 探测顺序。
   3. `resolveAIIds(plan, foods)`（新增纯函数）——AI 输出的 id 校验与映射，含非法 id 拒绝。
+  4. `buildWeekFromIds(calc, schedule, aiDays, locked)`（新增纯函数，实现期确定）——AI 选材 → 算法定克数组装，与 `generateWeek` 共用 `buildWeekLoop`。
 - **测试模块**：`generator.test.js`（增补 seed 用例）、`prompt.test.js`（新建）、AI 校验随其宿主模块建测试文件。
 - **先例**：`generator.test.js` / `nutrition.test.js` 现有风格（`node:test` + `assert/strict`，断言热量偏差 ≤2.6%、蛋白偏差 ≤1%、结构完整性）。API 路由与 UI 不建测试（项目现状即无此类先例），保持薄胶水。
 
