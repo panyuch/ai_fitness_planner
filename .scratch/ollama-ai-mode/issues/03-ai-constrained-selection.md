@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 (Ollama provider 接入)
 
-**Status:** ready-for-agent
+**Status:** done（2026-08-30 实现 `c18aaa6`，code-review 复查修复 `aced6e7`）
 
 - [x] 提示词并入食材库候选清单（id + 名称）与已锁定餐次摘要
 - [x] AI 输出 Schema 改为仅食材 id 清单（不含克数/宏量）

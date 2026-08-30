@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done（2026-08-30 实现 `bd1cbc1`，code-review 复查修复 `aced6e7`）
 
 - [x] provider 注册表增加 ollama（本机 OpenAI 兼容端点、模型 qwen3:8b）
 - [x] provider 探测顺序：云端真实 key 优先，其次 Ollama

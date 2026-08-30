@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done（2026-08-30 实现 `1a0cb32`，code-review 复查修复 `aced6e7`）
 
 - [x] 生成器接受可注入 seed；缺省/固定 seed 输出与 v1.0 一致
 - [x] 重生成（未锁餐）后至少一餐食材或分量与上次不同

@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 (AI 受控选材闭环)
 
-**Status:** ready-for-agent
+**Status:** done（2026-08-30 实现 `b78c8cd`，code-review 复查修复 `aced6e7`）
 
 - [x] 表单「AI 生成」开关，生成请求携带 AI 模式标记
 - [x] AI 模式 loading 文案区分于算法模式
