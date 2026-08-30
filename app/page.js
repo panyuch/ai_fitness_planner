@@ -333,7 +333,7 @@ export default function Page() {
             <span className="opt-sub">本机 Ollama 选食材 · 约需 1 分钟</span>
           </div>
           <p className="field-example">
-            开启后由本机 Ollama（qwen3:8b）挑选常见食材，克数与宏量仍由本地算法精确分配；需先启动 Ollama 并拉取模型，不可用时自动回退本地引擎。
+            开启后由本机 Ollama（qwen3:8b）挑选常见食材，克数与宏量仍由算法引擎精确分配；需先启动 Ollama 并拉取模型，不可用时自动回退算法引擎。
           </p>
 
           <button className="btn btn-primary btn-block" disabled={loading} onClick={() => gen(false)}>
@@ -399,7 +399,7 @@ function ResultView({ form, result, locked, onToggleLock, onRegen, onClearAndReg
           <h2 className="panel-title" style={{ margin: 0 }}>
             你的周计划
             <span className={"badge " + (usedAI ? "badge-ai" : "badge-local")}>
-              {usedAI ? "AI 模式" : "本地引擎"}
+              {usedAI ? "AI 模式" : "算法引擎"}
             </span>
           </h2>
           <div className="btn-row">
@@ -413,7 +413,7 @@ function ResultView({ form, result, locked, onToggleLock, onRegen, onClearAndReg
         {/* ticket 04：AI 请求失败/超时回退本地时的降级提示 */}
         {degraded ? (
           <div className="degrade-banner">
-            ⚠️ 本次由本地引擎生成（Ollama 未运行 / 模型缺失 / 生成超时，已自动回退，结果完整可用）
+            ⚠️ 本次由算法引擎生成（Ollama 未运行 / 模型缺失 / 生成超时，已自动回退，结果完整可用）
           </div>
         ) : null}
 

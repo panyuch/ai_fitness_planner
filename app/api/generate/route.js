@@ -2,7 +2,7 @@
 // POST /api/generate  { input, locked, seed?, useAI? } -> { calc, plan, usedAI }
 // 双模式路由：useAI 缺省/为 false → 直接走本地生成器（seed 生效）；
 // useAI=true → LLM 受控选材（仅 id）→ resolveAIIds 校验 → buildWeekFromIds 算法定克数；
-// 任何失败/超时/非法输出 → 回退本地引擎（usedAI:false），绝不产出坏结果。
+// 任何失败/超时/非法输出 → 回退算法引擎（usedAI:false），绝不产出坏结果。
 
 import { NextResponse } from "next/server";
 import { generateWeek, buildSchedule, buildWeekFromIds } from "../../../lib/generator.js";
@@ -67,7 +67,10 @@ export async function POST(request) {
     return NextResponse.json({ error: "请求体不是合法 JSON" }, { status: 400 });
   }
 
-  const { input = {}, locked = {}, useAI = false } = body || {};
+  const { input = {}, locked = {} } = body || {};
+  // useAI 仅接受布尔 true（spec：入参为布尔；字符串 "false" 不应误走 AI 路径），
+  // 与下方 seed 的有限数字校验同风格
+  const useAI = body?.useAI === true;
   // 仅接受有限数字 seed（重生成携带）；缺省/非法 → undefined → 默认 seed 与 v1.0 一致
   const seed = typeof body?.seed === "number" && Number.isFinite(body.seed) ? body.seed : undefined;
   const err = validateInput(input);
@@ -78,7 +81,7 @@ export async function POST(request) {
   // 双模式路由：useAI=true 才探测 LLM（云端 key 优先，其次本机 Ollama）。
   // 受控选材闭环：LLM 只选 id → resolveAIIds 校验（库外/结构异常整体抛错）
   // → buildWeekFromIds 按宏量目标分配分量（schedule 由算法确定，不依赖 AI）。
-  // degraded：曾请求 AI 但最终走了本地引擎（Ollama 未运行/模型缺失/超时/非法输出）。
+  // degraded：曾请求 AI 但最终走了算法引擎（Ollama 未运行/模型缺失/超时/非法输出）。
   let plan = null;
   let usedAI = false;
   let degraded = false;
@@ -93,7 +96,7 @@ export async function POST(request) {
       plan = buildWeekFromIds(calc, buildSchedule(input.trainFreq), aiDays, locked);
       usedAI = true;
     } catch (e) {
-      console.warn(`[generate] AI(${providerKey}) 失败，回退本地：${e.message}`);
+      console.warn(`[generate] AI(${providerKey}) 失败，回退算法引擎：${e.message}`);
       plan = null;
       degraded = true;
     } finally {
