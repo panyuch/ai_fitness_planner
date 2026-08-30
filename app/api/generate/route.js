@@ -78,8 +78,10 @@ export async function POST(request) {
   // 双模式路由：useAI=true 才探测 LLM（云端 key 优先，其次本机 Ollama）。
   // 受控选材闭环：LLM 只选 id → resolveAIIds 校验（库外/结构异常整体抛错）
   // → buildWeekFromIds 按宏量目标分配分量（schedule 由算法确定，不依赖 AI）。
+  // degraded：曾请求 AI 但最终走了本地引擎（Ollama 未运行/模型缺失/超时/非法输出）。
   let plan = null;
   let usedAI = false;
+  let degraded = false;
 
   if (useAI) {
     const providerKey = detectProvider();
@@ -93,6 +95,7 @@ export async function POST(request) {
     } catch (e) {
       console.warn(`[generate] AI(${providerKey}) 失败，回退本地：${e.message}`);
       plan = null;
+      degraded = true;
     } finally {
       clearTimeout(timer);
     }
@@ -104,5 +107,5 @@ export async function POST(request) {
     usedAI = false;
   }
 
-  return NextResponse.json({ calc, plan, usedAI });
+  return NextResponse.json({ calc, plan, usedAI, degraded });
 }

@@ -102,6 +102,9 @@ export default function Page() {
   const [historyEntries, setHistoryEntries] = useState([]);
   const [historyCount, setHistoryCount] = useState(0);
   const [guideOpen, setGuideOpen] = useState(false);
+  // ticket 04：AI 生成开关——开启后请求携带 useAI（后端走受控选材闭环，
+  // 失败/超时自动回退本地并返回 degraded 标记）
+  const [useAI, setUseAI] = useState(false);
   // ticket 01：重生成 seed 计数器——首次生成不携带（默认 seed 可复现），
   // 每次「重生成 / 清空锁餐重生成」递增携带，驱动算法模式食材轮换 + 分量浮动。
   const seedRef = useRef(0);
@@ -145,7 +148,7 @@ export default function Page() {
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ input, locked: useLocked ? locked : {}, seed }),
+          body: JSON.stringify({ input, locked: useLocked ? locked : {}, seed, useAI }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -159,7 +162,7 @@ export default function Page() {
         setLoading(false);
       }
     },
-    [form, locked]
+    [form, locked, useAI]
   );
 
   const toggleLock = (meal) => {
@@ -324,9 +327,24 @@ export default function Page() {
             </details>
           </section>
 
+          {/* ticket 04：AI 生成开关——算法模式（默认）与 AI 模式（本机 Ollama 受控选材） */}
+          <div className={"opt ai-toggle" + (useAI ? " selected" : "")} onClick={() => setUseAI((v) => !v)} role="switch" aria-checked={useAI} tabIndex={0}>
+            🤖 AI 生成
+            <span className="opt-sub">本机 Ollama 选食材 · 约需 1 分钟</span>
+          </div>
+          <p className="field-example">
+            开启后由本机 Ollama（qwen3:8b）挑选常见食材，克数与宏量仍由本地算法精确分配；需先启动 Ollama 并拉取模型，不可用时自动回退本地引擎。
+          </p>
+
           <button className="btn btn-primary btn-block" disabled={loading} onClick={() => gen(false)}>
             {loading ? <span className="spinner" /> : null}
-            {loading ? "生成中…" : "⚡ 生成我的周计划"}
+            {loading
+              ? useAI
+                ? "本地模型生成中，约需 1 分钟…"
+                : "生成中…"
+              : useAI
+                ? "🤖 AI 生成我的周计划"
+                : "⚡ 生成我的周计划"}
           </button>
           {error ? <p className="section-note" style={{ color: "var(--danger)" }}>{error}</p> : null}
         </div>
@@ -373,7 +391,7 @@ export default function Page() {
 
 // ---------------- 结果视图 ----------------
 function ResultView({ form, result, locked, onToggleLock, onRegen, onClearAndRegen, onExport, onSave }) {
-  const { calc, plan, usedAI } = result;
+  const { calc, plan, usedAI, degraded } = result;
   return (
     <>
       <section className="panel">
@@ -391,6 +409,13 @@ function ResultView({ form, result, locked, onToggleLock, onRegen, onClearAndReg
             <button className="btn btn-ghost" onClick={onExport}>⬇ 导出 Markdown</button>
           </div>
         </div>
+
+        {/* ticket 04：AI 请求失败/超时回退本地时的降级提示 */}
+        {degraded ? (
+          <div className="degrade-banner">
+            ⚠️ 本次由本地引擎生成（Ollama 未运行 / 模型缺失 / 生成超时，已自动回退，结果完整可用）
+          </div>
+        ) : null}
 
         {/* 一句话结论（常驻，ticket 02）：目标+周期 + TDEE + 每日热量 */}
         <div className="result-summary">

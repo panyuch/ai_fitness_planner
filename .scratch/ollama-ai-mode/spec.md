@@ -1,7 +1,7 @@
 # Ollama AI 模式 + 重生成随机化 — 规格 (SPEC)
 
 > 版本：v1.2 · 日期：2026-08-30
-> 状态：`ready-for-agent`
+> 状态：`done`（tickets 01-04 全部实现并提交：1a0cb32 / bd1cbc1 / c18aaa6 / 工单04）
 > 关联：`docs/adr/0002-ollama-ai-mode.md`、`CONTEXT.md`、`.scratch/ollama-ai-mode/issues/01~04`
 
 ---
